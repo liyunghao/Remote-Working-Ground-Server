@@ -4,6 +4,9 @@
 #     https://www.atlassian.com/git/tutorials/saving-changes/gitignore
 *
 !*.*
+!Makefile
+!bin/*
+!*/
 # Node artifact files
 node_modules/
 dist/
