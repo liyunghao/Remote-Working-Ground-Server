@@ -25,12 +25,20 @@ void sigHandler(int signo) {
 	return;
 }
 
-int main () {
+int main (int argc, char ** argv) {
 	
 	int sockfd, newsockfd, childpid;
 	unsigned int clilen;
+	unsigned int serv_port;
 	struct sockaddr_in cli_addr, serv_addr;
 	
+if (argc == 2) 
+		serv_port = atoi(argv[1]);
+	else {
+		cout << "[usage] ./np_single_proc <port number>\n";
+		exit(-1);
+	}	
+
 	if ( (sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
 		perror("Socket error:");
 	}
@@ -38,7 +46,7 @@ int main () {
 	memset(&serv_addr, 0, sizeof(serv_addr));
 	serv_addr.sin_family 	  = AF_INET;
 	serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-	serv_addr.sin_port 		  = htons(SERV_PORT);
+	serv_addr.sin_port 		  = htons(serv_port);
 	int reuse = 1;
 	setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, (const char*) &reuse, sizeof(int));
 	if ( bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0 ) {
@@ -65,8 +73,7 @@ int main () {
 			map<int, int[2]> mp;
 			close(sockfd);	
 			dup2(newsockfd, STDOUT_FILENO);
-			//dup2(newsockfd, STDIN_FILENO);
-			//close(newsockfd);
+			dup2(newsockfd, STDERR_FILENO);
 			while (1) {
 				string prompt = "% ";
 				write(STDOUT_FILENO, "% ", 2);
@@ -79,17 +86,13 @@ int main () {
 					if ( int(buf[i]) == 10 || int(buf[i]) == 13)
 						buf[i] = 0;
 				}
-				//fflush(stdout);
-				//write(newsockfd, buf, cnt-1);
-				//getline(cin, input);
+				
 				if (!cnt) {
 					break;
 				}	
 				input = string(buf);
 				if (input.empty())
 					continue;
-				//write(STDOUT_FILENO, input.c_str(), input.size());
-				//write(STDOUT_FILENO, "\n", 2);
 				rip++;
 				vector<string> cmd = parse(input);
 				int np = 0, exp = 0;
@@ -155,19 +158,26 @@ int main () {
 					argv[cnt] = NULL;
 					if ( !strncmp(argv[0], "printenv", 8) ) {
 						if (cnt < 2) {
-							cerr << "Command error\n";
-							return -1;
+							string msg = "Command error\n";
+							Write(newsockfd, msg.c_str(), msg.size());
+							continue;
 						}
-						if ( getenv(argv[1]) != NULL) 
-							cout << getenv(argv[1]) << '\n';
+						if ( getenv(argv[1]) != NULL) { 
+							string msg = getenv(argv[1]);
+							msg += '\n';
+							Write (newsockfd, msg.c_str(), msg.size());
+						}
 						continue;
 					} else if ( !strncmp(argv[0], "setenv", 6) ){
 						if (cnt < 3) {
-							cerr << "Command error\n";
+							string msg = "Command error\n";
+							Write(newsockfd, msg.c_str(), msg.size());
 							continue;
 						}
 						if (setenv(argv[1], argv[2], 1) < 0) {
-							cout << errno << '\n';
+							string msg = "Command error\n";
+							Write(newsockfd, msg.c_str(), msg.size());
+							continue;
 						}
 						continue;
 					} 

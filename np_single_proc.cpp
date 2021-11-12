@@ -2,16 +2,18 @@
 
 class client {
 public:
-	client (int _fd, string _name, string _ip, string _env, int _port, int _id): fd(_fd), name(_name), ip(_ip), env(_env), port(_port), id(_id) {}
+	client (int _fd, string _name, string _ip, string _env, int _port, int _id): fd(_fd), name(_name), ip(_ip), env(_env), port(_port), id(_id) {
+		rip = 0;
+	}
 	
-	int fd, port, id;
+	int fd, port, id, rip;
+	map<int, int[2]> mp;
 	string name, ip;
 	string env;
 };
 
 
 VC clients;
-map<int, int> id2fd;
 int assign;
 map<int, int[2]> up;
 
@@ -110,7 +112,7 @@ parseRes parse (string input) {
 }
 
 
-void broadcast(char *msg, int len) {
+void broadcast(const char *msg, int len) {
 	for (VIT it = clients.begin(); it != clients.end(); it++) {
 		int sock = it->fd;
 		Write(sock, msg, len);
@@ -118,84 +120,76 @@ void broadcast(char *msg, int len) {
 	return;
 }
 
-void yell(VIT it, string msg) {
-	char buf[MSGLEN];
-	memset(buf, 0, sizeof(buf));
-	int sz;
-	sz = sprintf(buf, "*** %s yelled ***: %s\n", it->name, msg);
-	broadcast(buf, sz);
+void yell(VIT it, string s) {
+	string msg;
+	msg = "*** " + it->name + " yelled ***: " + s + "\n";
+	broadcast(msg.c_str(), msg.size());
 }
 
-void tell(VIT it, int id, string msg) {
-	char buf[MSGLEN];
-	memset(buf, 0, sizeof(buf));
-	int sz;
-	if ( id2fd.find(id) != id2fd.end() ) {
-		sz = sprintf(buf, "*** %s told you ***: %s\n", it->name, msg);
-		Write(id2fd[id], buf, sz);
-		return;
-	}
-	//write error
-	sz = sprintf(buf, "*** ERROR: user #%d does not exist yet. ***\n", id);
-	Write(it->fd, buf, sz);
-	return;
-
-}
-
-void who(VIT x) {
-	//sort(clients);
-	string banner = "<ID>\t<nickname>\t<IP:port>\t<indicate me>\n";
-	for (VIT it = clients.begin(); it != clients.end(); it++) {
-		char buf[MSGLEN];
-		memset(buf, 0, sizeof(buf));
-		int sz;
-		if (it == x) {
-			sz = sprintf(buf, "%d\t%s\t%s:%d\t<-me", it->id, it->name, it->ip, it->name);
-		} else {
-			sz = sprintf(buf, "%d\t%s\t%s:%d\n", it->id, it->name, it->ip, it->name);
-		}
-		write(x->fd, buf, sz);	
-	}
-	return;
-}
-
-void name(VIT it, string s) {
-	char buf[MSGLEN];
-	memset(buf, 0, sizeof(buf));
-	int sz;
-	for (VIT it = clients.begin(); it != clients.end(); it++) {
-		if (s == it->name) {
-			sz = sprintf(buf, "*** User \'%s\' already exists.\n", s);	
-			Write(it->fd, buf, sz);
+void tell(VIT it, int id, string s) { //done
+	string msg;
+	for (VIT iter = clients.begin(); iter != clients.end(); iter++) {
+		if (iter->id == id) {
+			msg = "*** " + it->name + " told you ***: " + s + "\n";
+			Write(iter->fd, msg.c_str(), msg.size());
 			return;
 		}
 	}
-	sz = sprintf(buf, "*** User from %s:%d is named \'%s\'\n", it->ip, it->port, s);
-	broadcast(buf, sz);
+	msg = "*** ERROR: user #" + to_string(id) + " does not exist yet. ***\n";
+	Write(it->fd, msg.c_str(), msg.size());
+	return;
+
+}
+bool cmp(client a, client b) {
+	return a.id < b.id;
+}
+void who(VIT x, VIT it) { //done
+	sort(clients.begin(), clients.end(), cmp);
+	string banner = "<ID>\t<nickname>\t<IP:port>\t<indicate me>\n";
+	Write(it->fd, banner.c_str(), banner.size());
+	for (VIT it = clients.begin(); it != clients.end(); it++) {
+		string msg;
+		if (it == x) {
+			msg = to_string(it->id) + '\t' + it->name + '\t' + it->ip + ':' + to_string(it->port) + '\t' + "<-me\n";
+			//sz = sprintf(buf, "%d\t%s\t%s:%d\t<-me", it->id, it->name, it->ip, it->name);
+		} else {
+			msg = to_string(it->id) + '\t' + it->name + '\t' + it->ip + ':' + to_string(it->port) + '\t' + "\n";
+			//sz = sprintf(buf, "%d\t%s\t%s:%d\n", it->id, it->name, it->ip, it->name);
+		}
+		write(it->fd, msg.c_str(), msg.size());	
+	}
+	return;
+}
+
+void name(VIT it, string s) { //done
+	string msg;
+	for (VIT it = clients.begin(); it != clients.end(); it++) {
+		if (s == it->name) {
+			msg = "*** User \'" + s + "\' already exists.\n";	
+			Write(it->fd, msg.c_str(), msg.size());
+			return;
+		}
+	}
+	msg = "*** User from "+ it->ip + ":" + to_string(it->port) +" is named \'" + s + "\'\n";
+	broadcast(msg.c_str(), msg.size());
 	return;
 
 }
 
-void login(VIT it) {
-	char buf[MSGLEN];
-	memset(buf, 0, sizeof(buf));
-	int sz;
-	sz = sprintf(buf, "*** User \'%s\' entered from %s:%d. ***\n", it->name, it->ip, it->port);
-	broadcast(buf, sz);
+void login(VIT it) { //done
+	string msg;
+	msg = "*** User \'" + it->name + "\' entered from " + it->ip + ":" + to_string(it->port) + ". ***\n";	
+	broadcast(msg.c_str(), msg.size());
 }
 
-void logout(VIT it) {
-	char buf[MSGLEN];
-	memset(buf, 0, sizeof(buf));
-	int sz;
-
-	sz = sprintf(buf, "*** User \'%s\' left. ***\n", it->name);
-	//clear info
+void logout(VIT it) { //done
+	string msg;
+	msg = "*** User \'" + it->name + "\' left. ***\n";
 	close(it->fd);
 	assign = assign > it->id ? it->id : assign;
 	
 	clients.erase(it);
-	broadcast(buf, sz);
+	broadcast(msg.c_str(), msg.size());
 }
 
 void welcome(int fd) { //done
@@ -207,11 +201,53 @@ void welcome(int fd) { //done
 	return;
 
 }
+void sigHandler(int signo) {
+	pid_t pid;
+	int stat;
+	while((pid = waitpid(-1, &stat, WNOHANG) > 0 ));
+	return;
+}
 
-void exec_cmd(string input) {
+void exec_cmd(string input, VIT it) {
 	parseRes res;
 	res = parse(input);
 	res.print();
+	if (res.np) {
+		if (it->mp.find(it->rip + res.np) == it->mp.end()) { 
+			int fd[2];
+			pipe(fd);
+			it->mp[it->rip + res.np][0] = fd[0];
+			it->mp[it->rip + res.np][1] = fd[1];
+		}
+	}
+	if (res.exp) {
+		if (it->mp.find(it->rip + res.exp) == it->mp.end()) {
+			int fd[2];
+			pipe(fd);
+			it->mp[it->rip + res.exp][0] = fd[0];
+			it->mp[it->rip + res.exp][1] = fd[1];	
+		}
+	}
+	int cmdlen = res.cmd.size();
+	int pipesz = cmdlen - 1;
+	
+	int lastpid = 0;
+	int *prev = nullptr, *cur = nullptr;
+	for (int i = 0; i < cmdlen; i++) {
+		char *c = strdup(res.cmd[i].c_str());
+		char *tok = strtok(c, " ");
+		char *argv[256];
+		int cnt = 0;
+		while (tok) {
+			argv[cnt++] = tok;
+			tok = strtok(NULL, " ");
+		}
+		argv[cnt] = NULL;
+
+	
+	
+	
+	}
 	
 }
 
@@ -253,10 +289,9 @@ int main (int argc, char** argv) {
 	int nfds = getdtablesize();
 	FD_ZERO(&afds);
 	FD_SET(ms, &afds);
-	cout << "here\n";
+	//cout << "here\n";
 	while (1) {
-		memcpy(&rfds, &afds, sizeof(rfds));
-
+		rfds = afds;
 		if ( ( nready = select(nfds, &rfds, (fd_set *)0, (fd_set *)0, (struct timeval*)0 ) ) < 0 ) {
 			perror("Select error: ");
 		}
@@ -271,22 +306,26 @@ int main (int argc, char** argv) {
 			char ip[1024];
 			inet_ntop(AF_INET, &cliaddr.sin_addr, ip, 1024);
 			int port = ntohs(cliaddr.sin_port);
-			clients.pb(client(ns, "unknown", string(ip), port, ++assign));
-			cout << "new\n";	
-			// welcome mes
-			// broadcast
+			string env = "bin:.";
+			clients.pb(client(ns, "(no name)", string(ip), env, port, ++assign));
+			
+			VIT cur = clients.begin() + clients.size() - 1;
 			welcome(ns);
+			login(cur);
+			Write(ns, "% ", 2);
+
 			FD_SET(ns, &afds);
 			if (--nready == 0)
 				continue;
 		}
 		for (VIT it = clients.begin(); it != clients.end(); it++) {
 			if (FD_ISSET(it->fd, &rfds)) {
+				//cout << it->name << '\n';
 				int sz;
 				if ( (sz = Read(it->fd, buf, MAXLINE)) == 0) {
-					FD_CLR(it->fd, &afds);
+					//FD_CLR(it->fd, &afds);
 					//logout();
-					it--;
+					//it--;
 				} else {
 					//string cmd = line;
 					//Write(it->fd, buf, sz);
@@ -302,13 +341,19 @@ int main (int argc, char** argv) {
 						}
 					}
 					string input = string(cmd);
-					//cout << input << ' ' << input.size() << '\n';
-					exec_cmd(input);
-				}
-	
+					if (input == "exit") {
+						FD_CLR(it->fd, &afds);
+						logout(it);
+						it--;
+						continue;
+					} 
+					
+					exec_cmd(input, it);
+				}		
+				if (--nready == 0) 
+					break;
 			}
-			if (--nready == 0) 
-				break;
+
 		}
 	}
 
