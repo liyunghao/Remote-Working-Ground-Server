@@ -8,6 +8,7 @@ public:
 	
 	int fd, port, id, rip;
 	map<int, int[2]> mp;
+	map<int, int[2]> up;
 	string name, ip;
 	string env;
 };
@@ -15,7 +16,6 @@ public:
 
 VC clients;
 int assign;
-map<int, int[2]> up;
 
 parseRes parse (string input) {
 	int begin = 0;
@@ -212,6 +212,9 @@ void exec_cmd(string input, VIT it) {
 	parseRes res;
 	res = parse(input);
 	res.print();
+	setenv("PATH", it->env.c_str(), 1);
+	signal(SIGCHLD, SIG_IGN);
+	it->rip++;
 	if (res.np) {
 		if (it->mp.find(it->rip + res.np) == it->mp.end()) { 
 			int fd[2];
@@ -243,11 +246,184 @@ void exec_cmd(string input, VIT it) {
 			tok = strtok(NULL, " ");
 		}
 		argv[cnt] = NULL;
+		if ( !strncmp(argv[0], "printenv", 8) ) {
+			if (cnt < 2) {
+				string msg = "Command error\n";
+				Write(it->fd, msg.c_str(), msg.size());
+				continue;
+			}
+			if ( getenv(argv[1]) != NULL) { 
+				string msg = getenv(argv[1]);
+				msg += '\n';
+				Write (it->fd, msg.c_str(), msg.size());
+			}
+			continue;
+		} else if ( !strncmp(argv[0], "setenv", 6) ){
+			if (cnt < 3) {
+				string msg = "Command error\n";
+				Write(it->fd, msg.c_str(), msg.size());
+				continue;
+			}
+			if (setenv(argv[1], argv[2], 1) < 0) {
+				string msg = "Command error\n";
+				Write(it->fd, msg.c_str(), msg.size());
+				continue;
+			}
+			continue;
+		} 
+		if (i != res.cmd.size()-1) {
+			cur = new int[2];
+			while ( pipe(cur) );
+		}
 
-	
-	
-	
+		int pid;
+
+		while ( (pid = fork()) == -1) ;
+
+		lastpid = pid;
+
+		if (it->mp.find(it->rip) != it->mp.end())
+			close(it->mp[it->rip][1]);
+		if (pid == 0) {
+			if (res.cmd.size() != 1) {
+			// multiple subprocess
+				if (i == 0) {
+					// first process
+					if (it->mp.find(it->rip) != it->mp.end()) {
+						dup2(it->mp[it->rip][0], STDIN_FILENO);
+					} else if ( res.readPipe ) {
+						if (it->up.find(res.readPipe) != it->up.end()) {
+							dup2(it->up[res.readPipe][0], STDIN_FILENO);
+							string msg;
+							for (VIT iter = clients.begin(); iter != clients.end(); iter++) {
+								if (iter->id == readPipe) {
+								}
+							}
+						} else {
+							// user pipe dont exist
+						}
+
+					}
+					dup2(cur[1], STDOUT_FILENO);
+					close(cur[0]);
+					close(cur[1]);
+				} else if (i == res.cmd.size()-1) {
+					// last process
+					dup2(prev[0], STDIN_FILENO);
+					close(prev[0]);
+					close(prev[1]);
+
+					if (res.np) {
+						dup2(it->mp[it->rip + res.np][1], STDOUT_FILENO);
+					} else if (res.exp) {
+						dup2(it->mp[it->rip + res.exp][1], STDOUT_FILENO);
+						dup2(it->mp[it->rip + res.exp][1], STDERR_FILENO);
+					} else if (res.filename != "") {
+						int f;
+						f = open(res.filename.c_str(), O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU);
+						dup2(f, STDOUT_FILENO);
+						close(f);
+					} else if (res.writePipe) {
+						int flag = 1;
+						for (VIT iter = clients; iter != clients.end(); iter++) {
+							if (iter->id == res.writePipe) {
+								int tmpfd[2];
+								pipe(tmpfd)
+								iter->up[it->id][0] = tmpfd[0];
+								iter->up[it->id][1] = tmpfd[1];
+								dup2(iter->up[it->id][1], STDOUT_FILENO);
+								flag = 0;
+								break;
+							}
+						}
+						if (flag) {
+							//no user exist
+						}
+					} else {
+						dup2(it->fd, STDOUT_FILENO);
+							//?
+						close(it->fd);
+					}
+				} else {
+					dup2(prev[0], STDIN_FILENO);
+					close(prev[0]);
+					close(prev[1]);
+					dup2(cur[1], STDOUT_FILENO);
+					close(cur[0]);
+					close(cur[1]);
+				}
+			} else {
+				if (it->mp.find(it->rip) != it->mp.end()) {
+					dup2(it->mp[it->rip][0], STDIN_FILENO);
+				} else if ( res.readPipe ) {
+					if (it->up.find(res.readPipe) != it->up.end()) {
+						dup2(it->up[res.readPipe][0], STDIN_FILENO);
+					} else {
+						// user pipe dont exist
+					}
+				
+				}
+				if (res.np) {
+					dup2(it->mp[it->rip + res.np][1], STDOUT_FILENO);
+				} else if (res.exp) {
+					dup2(it->mp[it->rip + res.exp][1], STDOUT_FILENO);
+					dup2(it->mp[it->rip + res.exp][1], STDERR_FILENO);
+				} else if (res.filename != "") {
+					int f;
+					f = open(res.filename.c_str(), O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU);
+					if ( dup2(f, STDOUT_FILENO)  == -1) {
+						perror("dup2 error");
+					}
+					close(f);
+				} else if (res.writePipe) {
+					int flag = 1;
+					for (VIT iter = clients; iter != clients.end(); iter++) {
+						if (iter->id == res.writePipe) {
+							int tmpfd[2];
+							pipe(tmpfd)
+							iter->up[it->id][0] = tmpfd[0];
+							iter->up[it->id][1] = tmpfd[1];
+							dup2(iter->up[it->id][1], STDOUT_FILENO);
+							flag = 0;
+							break;
+						}
+					}
+					if (flag) {
+						//no user exist
+					}	
+			
+				} else {
+					dup2(it->fd, STDOUT_FILENO);
+					// ??
+					close(it->fd);
+				}
+			}
+
+			if (execvp(argv[0], argv) < 0 ) {
+					// poss
+				cerr << "Unknown command: [" << argv[0] << "].\n";
+				return ;
+			}
+		} else {
+			if (prev) {
+				close(prev[0]);
+				close(prev[1]);
+				delete[] prev;
+			}
+			prev = cur;
+		}
+
 	}
+	int status;
+    if ( res.np == 0 && res.exp == 0) {
+    	waitpid(lastpid, nullptr, WUNTRACED);
+    }
+    if (it->mp.find(it->rip) != it->mp.end()) {
+    	close(it->mp[it->rip][1]);
+    	close(it->mp[it->rip][0]);
+    	it->mp.erase(it->rip);
+    }
+	Write(it->fd, "% ", 2);
 	
 }
 

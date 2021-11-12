@@ -16,6 +16,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <algorithm>
+#include <utility>
 #define pb(x) push_back(x)
 #define SERV_PORT 7001
 #define MAXLINE 16000
@@ -23,6 +24,7 @@
 #define MSGLEN 1050
 #define VIT vector<client>::iterator
 #define VC vector<client>
+#define PII pair<int, int>
 using namespace std;
 
 struct parseRes {
