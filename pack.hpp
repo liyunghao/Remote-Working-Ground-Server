@@ -15,13 +15,38 @@
 #include <map>
 #include <sys/socket.h>
 #include <arpa/inet.h>
-
+#include <algorithm>
 #define pb(x) push_back(x)
 #define SERV_PORT 7001
+#define MAXLINE 16000
 #define MAX_CLI 10
-
+#define MSGLEN 1050
+#define VIT vector<client>::iterator
+#define VC vector<client>
 using namespace std;
 
+struct parseRes {
+	vector<string> cmd;
+	int np, exp;
+	string filename;
+	int readPipe, writePipe;
+	parseRes () {
+		np = 0, exp = 0, readPipe = 0, writePipe = 0;
+		
+	}	
+	void print() {
+		cout << "Cmd\n--------------------------------\n";
+		for (auto x : cmd) {
+			cout << x << '\n';
+		}
+		cout << "Np : " << np << '\n'; 
+		cout << "Exp : " << exp << '\n'; 
+		cout << "Filename : " << filename << '\n';
+		cout << "Readpipe : " << readPipe << '\n';
+		cout << "Writepipe : " << writePipe << '\n';
+		return;
+	}
+};
 
 ssize_t Read(int fd, void *vptr, size_t maxlen) {
 	ssize_t	n = read(fd, vptr, maxlen);

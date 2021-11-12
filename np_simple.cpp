@@ -283,8 +283,7 @@ int main () {
 			close(newsockfd);
 		} else {
 			close(newsockfd);
-			int stat;
-			waitpid(childpid, &stat, WUNTRACED || WCONTINUED);	
+			waitpid(childpid, nullptr, WUNTRACED);	
 		}		
 
 	}
