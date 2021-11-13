@@ -3,7 +3,7 @@ SRC = $(TARGET:=.cpp)
 
 .PHONY: all clean
 
-all: $(TARGET)
+all: $(TARGET) pack.hpp
 
 $(TARGET): % : %.cpp
 	g++ $< -o $@

@@ -15,8 +15,7 @@ public:
 
 
 VC clients;
-int assign;
-
+int avail[30];
 parseRes parse (string input) {
 	int begin = 0;
 	parseRes res;
@@ -25,8 +24,7 @@ parseRes parse (string input) {
 		switch(input[i]) {
 			case '|':
 				if (i == input.size() - 1) {
-					perror("Command Error\n");
-					exit(-1);
+					break;
 				} else if ( input[i+1] == ' ') {
 					if (begin < i)
 						res.cmd.pb(input.substr(begin, i - begin - 1 ));
@@ -41,8 +39,7 @@ parseRes parse (string input) {
 				break;
 			case '!':
 				if (i == input.size() - 1) {
-					perror("Command Error\n");
-					exit(-1);
+					break;
 				} 
 				if (begin < i )
 					res.cmd.pb(input.substr(begin, i-begin-1 ));
@@ -52,8 +49,7 @@ parseRes parse (string input) {
 			
 			case '>':
 				if (i == input.size() - 1) {
-					perror("Command Error\n");
-					exit(-1);
+					break;
 				} 
 				if ( input[i+1] == ' ' ) {
 					if (begin < i )
@@ -63,32 +59,35 @@ parseRes parse (string input) {
 				} else {
 					if (begin < i )
 						res.cmd.pb(input.substr(begin, i-begin-1));
-					int j;
-					for (j = i+1; j < input.size(); j++) {
+					int j = i+1;
+					for ( ; j < input.size(); j++) {
+
 						if ( input[j] == ' ' ) 
 							break;	
 					}	
 					//cout << i << ' ' << j << '\n';
 					//cout <<  atoi(input.substr(i+1, j-i).c_str()) << '\n';
 					res.writePipe = atoi(input.substr(i+1, j-i).c_str());
+					
 					i = j;
 					begin = i+1;
+					if (begin > input.size()) {
+						f = 0;
+					}
 				}
 				break;
 			
 			case '<':
 				if (i == input.size() - 1) {
-					perror("Command Error\n");
-					exit(-1);
+					break;
 				} 
 				if ( input[i+1] == ' ' ) {
-					perror("Command Error\n");
-					exit(-1);
+					break;
 				} else {
 					if (begin < i )
 						res.cmd.pb(input.substr(begin, i-begin-1));
-					int j;
-					for (j = i+1; j < input.size(); j++) {
+					int j = i+1;
+					for ( ; j < input.size(); j++) {
 						if ( input[j] == ' ')
 							break;	
 					}	
@@ -98,6 +97,9 @@ parseRes parse (string input) {
 					i = j;
 					begin = i+1;
 					//cout << begin << '\n';
+					if (begin > input.size()) {
+						f = 0;
+					}
 				}					
 				break;
 			
@@ -114,8 +116,7 @@ parseRes parse (string input) {
 
 void broadcast(const char *msg, int len) {
 	for (VIT it = clients.begin(); it != clients.end(); it++) {
-		int sock = it->fd;
-		Write(sock, msg, len);
+		Write(it->fd, msg, len);
 	}
 	return;
 }
@@ -135,7 +136,7 @@ void tell(VIT it, int id, string s) { //done
 			return;
 		}
 	}
-	msg = "*** ERROR: user #" + to_string(id) + " does not exist yet. ***\n";
+	msg = "*** Error: user #" + to_string(id) + " does not exist yet. ***\n";
 	Write(it->fd, msg.c_str(), msg.size());
 	return;
 
@@ -143,34 +144,43 @@ void tell(VIT it, int id, string s) { //done
 bool cmp(client a, client b) {
 	return a.id < b.id;
 }
-void who(VIT x, VIT it) { //done
+VIT who(VIT it) { //done
+	int id = it->id;
+	VIT pin;
 	sort(clients.begin(), clients.end(), cmp);
+	for (VIT iter = clients.begin(); iter != clients.end(); iter++) {
+		if (id == iter->id) {
+			pin = iter;
+			break;
+		}
+	}
 	string banner = "<ID>\t<nickname>\t<IP:port>\t<indicate me>\n";
-	Write(it->fd, banner.c_str(), banner.size());
-	for (VIT it = clients.begin(); it != clients.end(); it++) {
+	Write(pin->fd, banner.c_str(), banner.size());
+	for (VIT iter = clients.begin(); iter != clients.end(); iter++) {
 		string msg;
-		if (it == x) {
-			msg = to_string(it->id) + '\t' + it->name + '\t' + it->ip + ':' + to_string(it->port) + '\t' + "<-me\n";
+		if (iter == pin) {
+			msg = to_string(iter->id) + '\t' + iter->name + '\t' + iter->ip + ':' + to_string(iter->port) + '\t' + "<-me\n";
 			//sz = sprintf(buf, "%d\t%s\t%s:%d\t<-me", it->id, it->name, it->ip, it->name);
 		} else {
-			msg = to_string(it->id) + '\t' + it->name + '\t' + it->ip + ':' + to_string(it->port) + '\t' + "\n";
+			msg = to_string(iter->id) + '\t' + iter->name + '\t' + iter->ip + ':' + to_string(iter->port) + "\n";
 			//sz = sprintf(buf, "%d\t%s\t%s:%d\n", it->id, it->name, it->ip, it->name);
 		}
-		write(it->fd, msg.c_str(), msg.size());	
+		Write(pin->fd, msg.c_str(), msg.size());	
 	}
-	return;
+	return pin;
 }
 
 void name(VIT it, string s) { //done
 	string msg;
-	for (VIT it = clients.begin(); it != clients.end(); it++) {
-		if (s == it->name) {
-			msg = "*** User \'" + s + "\' already exists.\n";	
+	for (VIT iter = clients.begin(); iter != clients.end(); iter++) {
+		if (s == iter->name) {
+			msg = "*** User \'" + s + "\' already exists. ***\n";	
 			Write(it->fd, msg.c_str(), msg.size());
 			return;
 		}
 	}
-	msg = "*** User from "+ it->ip + ":" + to_string(it->port) +" is named \'" + s + "\'\n";
+	msg = "*** User from "+ it->ip + ":" + to_string(it->port) +" is named \'" + s + "\'. ***\n";
+	it->name = s;
 	broadcast(msg.c_str(), msg.size());
 	return;
 
@@ -186,8 +196,12 @@ void logout(VIT it) { //done
 	string msg;
 	msg = "*** User \'" + it->name + "\' left. ***\n";
 	close(it->fd);
-	assign = assign > it->id ? it->id : assign;
-	
+	avail[it->id - 1] = 0;
+	for (VIT iter = clients.begin(); iter != clients.end(); iter++) {
+		if (iter->up.find(it->id) != iter->up.end()) {
+			iter->up.erase(it->id);
+		}
+	}
 	clients.erase(it);
 	broadcast(msg.c_str(), msg.size());
 }
@@ -210,11 +224,18 @@ void sigHandler(int signo) {
 
 void exec_cmd(string input, VIT it) {
 	parseRes res;
+	//cout << "parse\n";
+	if (input.empty()) {
+		Write(it->fd, "% ", 2);
+		return;
+	}
 	res = parse(input);
-	res.print();
+	//res.print();
+	cout << "Input: " << input << '\n';
 	setenv("PATH", it->env.c_str(), 1);
 	signal(SIGCHLD, SIG_IGN);
 	it->rip++;
+	//cout << "Done Parse\n";
 	if (res.np) {
 		if (it->mp.find(it->rip + res.np) == it->mp.end()) { 
 			int fd[2];
@@ -231,6 +252,102 @@ void exec_cmd(string input, VIT it) {
 			it->mp[it->rip + res.exp][1] = fd[1];	
 		}
 	}
+	//if (res.writePipe) {
+		//int user = 0;
+		//for (VIT iter = clients.begin(); iter != clients.end(); iter++ ) {
+			//if (res.writePipe == iter->id) {
+				//user = 1;
+				//if (iter->up.find(it->id) == iter->up.end()) {
+					//int fd[2];
+					//pipe(fd);
+					//iter->up[it->id][0] = fd[0];
+					//iter->up[it->id][1] = fd[1];
+					////cout << "create " << it->id << " to " << iter->id << '\n';
+					//string msg;
+					//msg = "*** " + it->name + " (#" + to_string(it->id) + ") just piped \'" + input + "\' to " +  iter->name;
+					//msg += " (#" + to_string(iter->id) + ") ***\n";
+					//broadcast(msg.c_str(), msg.size());
+					
+				//} else {
+					////pipe exists
+					//string msg;
+					//msg = "*** Error: the pipe #" + to_string(it->id) + "->#" + to_string(iter->id) + " already exists. ***\n";
+					//Write(it->fd, msg.c_str(), msg.size());
+					//res.writePipe = -1;
+				//}
+			//}
+		//}
+		//if (!user) {
+			//string msg;
+			//msg = "*** Error: user #" + to_string(res.writePipe) + " does not exist yet. ***\n";
+			//Write(it->fd, msg.c_str(), msg.size());
+		//}
+	//} 
+	if (res.readPipe) {
+		int user = 0;
+		for (VIT iter = clients.begin(); iter != clients.end(); iter++) {
+			if (iter->id == res.readPipe) {
+				user = 1;
+				if (it->up.find(res.readPipe) == it->up.end()) {
+					//pipe dont exist	
+					string msg;
+					msg = "*** Error: the pipe #" + to_string(iter->id) + "->#" + to_string(it->id) + " does not exist yet. ***\n";
+					Write(it->fd, msg.c_str(), msg.size());
+				} else {
+					// recv pipe
+					string msg;
+					msg = "*** " + it->name + " (#" + to_string(it->id) + ") just received from " + iter->name + " (#" +to_string(iter->id) + ") by \'" + input + "\' ***\n";
+					broadcast(msg.c_str(), msg.size());
+					//cerr << "Reading -> so need to close write end "<< it->up[res.readPipe][1] << '\n';
+					//for (VIT tmp = clients.begin(); tmp != clients.end(); tmp++) {
+						//cerr << "id = " << tmp->id << " fd = " << tmp->fd << '\n';
+					//}
+					close(it->up[res.readPipe][1]);
+				}
+				break;
+			}
+		}
+		if (!user) {
+			//user dont exist
+			string msg;
+			msg = "*** Error: user #" + to_string(res.readPipe) + " does not exist yet. ***\n";
+			Write(it->fd, msg.c_str(), msg.size());
+		}
+	}
+	if (res.writePipe) {
+
+		int user = 0;
+		for (VIT iter = clients.begin(); iter != clients.end(); iter++ ) {
+			if (res.writePipe == iter->id) {
+				user = 1;
+				if (iter->up.find(it->id) == iter->up.end()) {
+					int fd[2];
+					pipe(fd);
+					//cerr << "Opening: ";
+					//cerr << fd[0] << ' ' << fd[1] << '\n';
+					iter->up[it->id][0] = fd[0];
+					iter->up[it->id][1] = fd[1];
+					//cout << "create " << it->id << " to " << iter->id << '\n';
+					string msg;
+					msg = "*** " + it->name + " (#" + to_string(it->id) + ") just piped \'" + input + "\' to " +  iter->name;
+					msg += " (#" + to_string(iter->id) + ") ***\n";
+					broadcast(msg.c_str(), msg.size());
+				} else {
+					//pipe exists
+					string msg;
+					msg = "*** Error: the pipe #" + to_string(it->id) + "->#" + to_string(iter->id) + " already exists. ***\n";
+					Write(it->fd, msg.c_str(), msg.size());
+					res.writePipe = -1;
+				}
+			}
+		}
+		if (!user) {
+			string msg;
+			msg = "*** Error: user #" + to_string(res.writePipe) + " does not exist yet. ***\n";
+			Write(it->fd, msg.c_str(), msg.size());
+		}
+	} 
+
 	int cmdlen = res.cmd.size();
 	int pipesz = cmdlen - 1;
 	
@@ -264,11 +381,26 @@ void exec_cmd(string input, VIT it) {
 				Write(it->fd, msg.c_str(), msg.size());
 				continue;
 			}
-			if (setenv(argv[1], argv[2], 1) < 0) {
-				string msg = "Command error\n";
-				Write(it->fd, msg.c_str(), msg.size());
-				continue;
-			}
+			it->env = argv[2];
+			continue;
+		} else if ( !strncmp(argv[0], "name", 4) ) {
+			name(it, argv[1]);	
+			continue;
+		} else if ( !strncmp(argv[0], "yell", 4) ) {
+			string msg;
+			int found = input.find(argv[1]);
+			msg = input.substr(found);
+			yell(it, msg);
+			continue;
+		} else if ( !strncmp(argv[0], "tell", 4) ) {
+			string msg;
+			int found = input.find(argv[2]);
+			msg = input.substr(found);
+			tell(it, atoi(argv[1]), msg);
+			continue;
+		} else if ( !strncmp(argv[0], "who", 3) ) {
+			VIT pin = who(it);
+			it = pin;
 			continue;
 		} 
 		if (i != res.cmd.size()-1) {
@@ -282,8 +414,10 @@ void exec_cmd(string input, VIT it) {
 
 		lastpid = pid;
 
-		if (it->mp.find(it->rip) != it->mp.end())
+		if (it->mp.find(it->rip) != it->mp.end()) {
+			//cerr << it->mp[it->rip][1] << '\n';
 			close(it->mp[it->rip][1]);
+		}
 		if (pid == 0) {
 			if (res.cmd.size() != 1) {
 			// multiple subprocess
@@ -292,24 +426,38 @@ void exec_cmd(string input, VIT it) {
 					if (it->mp.find(it->rip) != it->mp.end()) {
 						dup2(it->mp[it->rip][0], STDIN_FILENO);
 					} else if ( res.readPipe ) {
-						if (it->up.find(res.readPipe) != it->up.end()) {
-							dup2(it->up[res.readPipe][0], STDIN_FILENO);
-							string msg;
-							for (VIT iter = clients.begin(); iter != clients.end(); iter++) {
-								if (iter->id == readPipe) {
-								}
+						int user = 0, exist = 0;
+						VIT iter;
+						for (iter = clients.begin(); iter != clients.end(); iter++) {
+							if (iter->id == res.readPipe) {
+								user = 1;
+								break;
 							}
+						}
+						if (!user) {
+
+							int d = open("/dev/null", O_RDWR);
+							dup2(d, STDIN_FILENO);
+						} else if (it->up.find(res.readPipe) != it->up.end()) {
+							dup2(it->up[res.readPipe][0], STDIN_FILENO);
+
+							//it->up.erase(res.readPipe);
 						} else {
 							// user pipe dont exist
+
+							int d = open("/dev/null", O_RDWR);
+							dup2(d, STDIN_FILENO);
 						}
 
 					}
 					dup2(cur[1], STDOUT_FILENO);
+					//cerr << cur[0] << ' ' << cur[1] << '\n';
 					close(cur[0]);
 					close(cur[1]);
 				} else if (i == res.cmd.size()-1) {
 					// last process
 					dup2(prev[0], STDIN_FILENO);
+					//cerr << prev[0] << ' ' << prev[1] << '\n';
 					close(prev[0]);
 					close(prev[1]);
 
@@ -324,25 +472,36 @@ void exec_cmd(string input, VIT it) {
 						dup2(f, STDOUT_FILENO);
 						close(f);
 					} else if (res.writePipe) {
-						int flag = 1;
-						for (VIT iter = clients; iter != clients.end(); iter++) {
+						int user = 0;
+						
+						VIT iter;
+						for (iter = clients.begin(); iter != clients.end(); iter++) {
 							if (iter->id == res.writePipe) {
-								int tmpfd[2];
-								pipe(tmpfd)
-								iter->up[it->id][0] = tmpfd[0];
-								iter->up[it->id][1] = tmpfd[1];
-								dup2(iter->up[it->id][1], STDOUT_FILENO);
-								flag = 0;
-								break;
+								user = 1;	
+								if (iter->up.find(it->id) != iter->up.end()) {
+									
+									dup2(iter->up[it->id][1], STDOUT_FILENO);
+									//cerr << iter->up[it->id][1] << '\n';
+									close(iter->up[it->id][1]);
+									break;
+								} 
 							}
 						}
-						if (flag) {
+						if (res.writePipe == -1) {
+							int d = open("/dev/null", O_RDWR);
+							dup2(d, STDOUT_FILENO);
+								
+						} else if (!user) {
+
+							int d = open("/dev/null", O_RDWR);
+							dup2(d, STDOUT_FILENO);
 							//no user exist
-						}
+						} 
 					} else {
 						dup2(it->fd, STDOUT_FILENO);
-							//?
-						close(it->fd);
+						dup2(it->fd, STDERR_FILENO);
+						//?
+						//close(it->fd);
 					}
 				} else {
 					dup2(prev[0], STDIN_FILENO);
@@ -351,15 +510,30 @@ void exec_cmd(string input, VIT it) {
 					dup2(cur[1], STDOUT_FILENO);
 					close(cur[0]);
 					close(cur[1]);
+					dup2(it->fd, STDERR_FILENO);
 				}
 			} else {
 				if (it->mp.find(it->rip) != it->mp.end()) {
 					dup2(it->mp[it->rip][0], STDIN_FILENO);
 				} else if ( res.readPipe ) {
-					if (it->up.find(res.readPipe) != it->up.end()) {
+					int user = 0, exist = 0;
+					VIT iter;
+					for (iter = clients.begin(); iter != clients.end(); iter++) {
+						if (iter->id == res.readPipe) {
+							user = 1;
+							break;
+						}
+					}
+					if (!user) {
+						int d = open("/dev/null", O_RDWR);
+						dup2(d, STDIN_FILENO);
+					} else if (it->up.find(res.readPipe) != it->up.end()) {
 						dup2(it->up[res.readPipe][0], STDIN_FILENO);
+						it->up.erase(res.readPipe);
 					} else {
 						// user pipe dont exist
+						int d = open("/dev/null", O_RDWR);
+						dup2(d, STDIN_FILENO);
 					}
 				
 				}
@@ -376,36 +550,48 @@ void exec_cmd(string input, VIT it) {
 					}
 					close(f);
 				} else if (res.writePipe) {
-					int flag = 1;
-					for (VIT iter = clients; iter != clients.end(); iter++) {
+					int user = 0, exist = 0;
+					
+					VIT iter;
+				
+					for (iter = clients.begin(); iter != clients.end(); iter++) {
 						if (iter->id == res.writePipe) {
-							int tmpfd[2];
-							pipe(tmpfd)
-							iter->up[it->id][0] = tmpfd[0];
-							iter->up[it->id][1] = tmpfd[1];
-							dup2(iter->up[it->id][1], STDOUT_FILENO);
-							flag = 0;
-							break;
+							user = 1;	
+							if (iter->up.find(it->id) != iter->up.end()) {
+								dup2(iter->up[it->id][1], STDOUT_FILENO);
+								//close(iter->up[it->id][1]);
+
+								break;
+							} 
 						}
 					}
-					if (flag) {
+					if (!user) {
+						int d = open("/dev/null", O_RDWR);
+						dup2(d, STDOUT_FILENO);
 						//no user exist
-					}	
+					}
+		
 			
 				} else {
 					dup2(it->fd, STDOUT_FILENO);
+					//dup2(it->fd, STDERR_FILENO);
 					// ??
-					close(it->fd);
+					//close(it->fd);
 				}
 			}
-
+			dup2(it->fd, STDERR_FILENO);
+			//cout << it->fd << '\n';
 			if (execvp(argv[0], argv) < 0 ) {
 					// poss
-				cerr << "Unknown command: [" << argv[0] << "].\n";
-				return ;
+				string msg; 
+				msg = "Unknown command: [" + string(argv[0]) + "].\n";
+				Write(it->fd, msg.c_str(), msg.size());
+
+				exit(-1);
 			}
 		} else {
 			if (prev) {
+				//cerr << prev[0] << ' ' << prev[1] << '\n';
 				close(prev[0]);
 				close(prev[1]);
 				delete[] prev;
@@ -415,14 +601,23 @@ void exec_cmd(string input, VIT it) {
 
 	}
 	int status;
-    if ( res.np == 0 && res.exp == 0) {
+    if ( res.np == 0 && res.exp == 0 && res.writePipe == 0) {
     	waitpid(lastpid, nullptr, WUNTRACED);
     }
     if (it->mp.find(it->rip) != it->mp.end()) {
-    	close(it->mp[it->rip][1]);
+    	//close(it->mp[it->rip][1]);
     	close(it->mp[it->rip][0]);
     	it->mp.erase(it->rip);
     }
+	if (res.readPipe) {
+		if (it->up.find(res.readPipe) != it->up.end()) {
+			//cerr << "Finish reading so need to close pipe: ";
+			//cerr << it->up[res.readPipe][0] << ' ' << it->up[res.readPipe][1] << '\n';
+			close(it->up[res.readPipe][0]);
+		//	close(it->up[res.readPipe][1]);
+			it->up.erase(res.readPipe);
+		}
+	}
 	Write(it->fd, "% ", 2);
 	
 }
@@ -431,7 +626,6 @@ void exec_cmd(string input, VIT it) {
 
 int main (int argc, char** argv) {
 	int ms, nready, ns;
-	assign = 0;
 	unsigned int clilen;
 	char buf[MAXLINE];
 
@@ -444,7 +638,7 @@ int main (int argc, char** argv) {
 		cout << "[usage] ./np_single_proc <port number>\n";
 		exit(-1);
 	}
-	
+	memset(avail, 0, sizeof(avail));
 	if ( (ms = socket(AF_INET, SOCK_STREAM, 0)) < 0 ) {
 		perror("Socket error: ");		
 		exit(-1);
@@ -483,7 +677,16 @@ int main (int argc, char** argv) {
 			inet_ntop(AF_INET, &cliaddr.sin_addr, ip, 1024);
 			int port = ntohs(cliaddr.sin_port);
 			string env = "bin:.";
-			clients.pb(client(ns, "(no name)", string(ip), env, port, ++assign));
+			int id = 0;
+			for (int i = 0; i < 30; i++) {
+				if (avail[i] == 0) {
+					avail[i] = 1;
+					id = i+1;
+					break;
+				}
+			}
+			cout << "Accept id = " << id << " fd = "<< ns << '\n';
+			clients.pb(client(ns, "(no name)", string(ip), env, port, id));
 			
 			VIT cur = clients.begin() + clients.size() - 1;
 			welcome(ns);

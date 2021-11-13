@@ -82,7 +82,7 @@ ssize_t	writen(int fd, const void *vptr, size_t n) {
 
 void Write(int fd, const void *ptr, size_t nbytes) {
 	if (writen(fd, ptr, nbytes) != nbytes){
-		cerr << "Write Error" << endl;
+		perror("Write Error");
 		exit(EXIT_FAILURE);
 	}
 }
