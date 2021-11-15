@@ -1,118 +1,8 @@
 #include "pack.hpp"
 
-class client {
-public:
-	client (int _fd, string _name, string _ip, string _env, int _port, int _id): fd(_fd), name(_name), ip(_ip), env(_env), port(_port), id(_id) {
-		rip = 0;
-	}
-	
-	int fd, port, id, rip;
-	map<int, int[2]> mp;
-	map<int, int[2]> up;
-	string name, ip;
-	string env;
-};
-
 
 VC clients;
 int avail[30];
-parseRes parse (string input) {
-	int begin = 0;
-	parseRes res;
-	int f = 1;
-	for (int i = 0; i < input.size(); i++) {
-		switch(input[i]) {
-			case '|':
-				if (i == input.size() - 1) {
-					break;
-				} else if ( input[i+1] == ' ') {
-					if (begin < i)
-						res.cmd.pb(input.substr(begin, i - begin - 1 ));
-					begin = i+2;
-				} else {
-					if (begin < i )
-						res.cmd.pb(input.substr(begin, i - begin - 1 ));
-					res.np = atoi(input.substr(i+1).c_str());
-					f = 0;
-				}
-				
-				break;
-			case '!':
-				if (i == input.size() - 1) {
-					break;
-				} 
-				if (begin < i )
-					res.cmd.pb(input.substr(begin, i-begin-1 ));
-				res.exp = atoi(input.substr(i+1).c_str());
-				f = 0;
-				break;
-			
-			case '>':
-				if (i == input.size() - 1) {
-					break;
-				} 
-				if ( input[i+1] == ' ' ) {
-					if (begin < i )
-						res.cmd.pb(input.substr(begin, i-begin-1));
-					res.filename = input.substr(i+2);
-					f = 0;
-				} else {
-					if (begin < i )
-						res.cmd.pb(input.substr(begin, i-begin-1));
-					int j = i+1;
-					for ( ; j < input.size(); j++) {
-
-						if ( input[j] == ' ' ) 
-							break;	
-					}	
-					//cout << i << ' ' << j << '\n';
-					//cout <<  atoi(input.substr(i+1, j-i).c_str()) << '\n';
-					res.writePipe = atoi(input.substr(i+1, j-i).c_str());
-					
-					i = j;
-					begin = i+1;
-					if (begin > input.size()) {
-						f = 0;
-					}
-				}
-				break;
-			
-			case '<':
-				if (i == input.size() - 1) {
-					break;
-				} 
-				if ( input[i+1] == ' ' ) {
-					break;
-				} else {
-					if (begin < i )
-						res.cmd.pb(input.substr(begin, i-begin-1));
-					int j = i+1;
-					for ( ; j < input.size(); j++) {
-						if ( input[j] == ' ')
-							break;	
-					}	
-					//cout << i << ' ' << j << '\n';
-					//cout <<  atoi(input.substr(i+1, j-i).c_str()) << '\n';
-					res.readPipe = atoi(input.substr(i+1, j-i).c_str());
-					i = j;
-					begin = i+1;
-					//cout << begin << '\n';
-					if (begin > input.size()) {
-						f = 0;
-					}
-				}					
-				break;
-			
-			default:
-				continue;
-		}
-	}
-	if (f) {
-		res.cmd.pb(input.substr(begin));
-	}
-	return res;
-}
-
 
 void broadcast(const char *msg, int len) {
 	for (VIT it = clients.begin(); it != clients.end(); it++) {
@@ -252,37 +142,6 @@ void exec_cmd(string input, VIT it) {
 			it->mp[it->rip + res.exp][1] = fd[1];	
 		}
 	}
-	//if (res.writePipe) {
-		//int user = 0;
-		//for (VIT iter = clients.begin(); iter != clients.end(); iter++ ) {
-			//if (res.writePipe == iter->id) {
-				//user = 1;
-				//if (iter->up.find(it->id) == iter->up.end()) {
-					//int fd[2];
-					//pipe(fd);
-					//iter->up[it->id][0] = fd[0];
-					//iter->up[it->id][1] = fd[1];
-					////cout << "create " << it->id << " to " << iter->id << '\n';
-					//string msg;
-					//msg = "*** " + it->name + " (#" + to_string(it->id) + ") just piped \'" + input + "\' to " +  iter->name;
-					//msg += " (#" + to_string(iter->id) + ") ***\n";
-					//broadcast(msg.c_str(), msg.size());
-					
-				//} else {
-					////pipe exists
-					//string msg;
-					//msg = "*** Error: the pipe #" + to_string(it->id) + "->#" + to_string(iter->id) + " already exists. ***\n";
-					//Write(it->fd, msg.c_str(), msg.size());
-					//res.writePipe = -1;
-				//}
-			//}
-		//}
-		//if (!user) {
-			//string msg;
-			//msg = "*** Error: user #" + to_string(res.writePipe) + " does not exist yet. ***\n";
-			//Write(it->fd, msg.c_str(), msg.size());
-		//}
-	//} 
 	if (res.readPipe) {
 		int user = 0;
 		for (VIT iter = clients.begin(); iter != clients.end(); iter++) {
@@ -298,10 +157,6 @@ void exec_cmd(string input, VIT it) {
 					string msg;
 					msg = "*** " + it->name + " (#" + to_string(it->id) + ") just received from " + iter->name + " (#" +to_string(iter->id) + ") by \'" + input + "\' ***\n";
 					broadcast(msg.c_str(), msg.size());
-					//cerr << "Reading -> so need to close write end "<< it->up[res.readPipe][1] << '\n';
-					//for (VIT tmp = clients.begin(); tmp != clients.end(); tmp++) {
-						//cerr << "id = " << tmp->id << " fd = " << tmp->fd << '\n';
-					//}
 					close(it->up[res.readPipe][1]);
 				}
 				break;

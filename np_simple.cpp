@@ -1,7 +1,7 @@
 #include "pack.hpp"
 
 
-vector<string> parse (string cmd) {
+vector<string> _parse (string cmd) {
 	vector<string> res;
 	string delim = "|!>";
 	char *c = strdup(cmd.c_str());
@@ -32,7 +32,7 @@ int main (int argc, char ** argv) {
 	unsigned int serv_port;
 	struct sockaddr_in cli_addr, serv_addr;
 	
-if (argc == 2) 
+	if (argc == 2) 
 		serv_port = atoi(argv[1]);
 	else {
 		cout << "[usage] ./np_single_proc <port number>\n";
@@ -94,7 +94,7 @@ if (argc == 2)
 				if (input.empty())
 					continue;
 				rip++;
-				vector<string> cmd = parse(input);
+				vector<string> cmd = _parse(input);
 				int np = 0, exp = 0;
 				int idx1 = input.find_last_of("|");
 				int idx2 = input.find_last_of("!");

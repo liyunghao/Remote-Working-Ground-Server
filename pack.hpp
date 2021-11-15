@@ -17,15 +17,57 @@
 #include <arpa/inet.h>
 #include <algorithm>
 #include <utility>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+
 #define pb(x) push_back(x)
-#define SERV_PORT 7001
 #define MAXLINE 16000
-#define MAX_CLI 10
+#define MAX_CLI 30
 #define MSGLEN 1050
 #define VIT vector<client>::iterator
 #define VC vector<client>
 #define PII pair<int, int>
 using namespace std;
+
+
+
+struct clientInfo {
+	int pid, port, id;
+	char name[25], ip[50];
+	
+	info(int _pid, int _port, int _id, char *name, char* ip):pid(_pid), port(_port), id(_id) {
+		memset(name, 0, sizeof(name));
+		memset(ip, 0, sizeof(ip));
+		strcpy(name, _name);
+		strcpy(ip, _ip);
+	}
+	bool operator >(const clientInfo &a) {
+		return id > a.id;
+	}
+	
+
+};
+
+struct memory {
+	struct clientInfo info[30];
+	int avail[30];
+	int userNum;
+	char op[20], msg[1050];
+};
+
+class client {
+public:
+    client (int _fd, string _name, string _ip, string _env, int _port, int _id): fd(_fd), name(_name), ip(_ip), env(_env), port(_port), id(_id) {
+        rip = 0;
+    }
+
+    int fd, port, id, rip;
+    map<int, int[2]> mp;
+    map<int, int[2]> up;
+    string name, ip;
+    string env;
+};
+
 
 struct parseRes {
 	vector<string> cmd;
@@ -49,6 +91,102 @@ struct parseRes {
 		return;
 	}
 };
+parseRes parse (string input) {
+	int begin = 0;
+	parseRes res;
+	int f = 1;
+	for (int i = 0; i < input.size(); i++) {
+		switch(input[i]) {
+			case '|':
+				if (i == input.size() - 1) {
+						break;
+				} else if ( input[i+1] == ' ') {
+						if (begin < i)
+								res.cmd.pb(input.substr(begin, i - begin - 1 ));
+						begin = i+2;
+				} else {
+						if (begin < i )
+								res.cmd.pb(input.substr(begin, i - begin - 1 ));
+						res.np = atoi(input.substr(i+1).c_str());
+						f = 0;
+				}
+
+				break;
+			case '!':
+				if (i == input.size() - 1) {
+						break;
+				}
+				if (begin < i )
+						res.cmd.pb(input.substr(begin, i-begin-1 ));
+				res.exp = atoi(input.substr(i+1).c_str());
+				f = 0;
+				break;
+
+			case '>':
+				if (i == input.size() - 1) {
+						break;
+				}
+				if ( input[i+1] == ' ' ) {
+						if (begin < i )
+								res.cmd.pb(input.substr(begin, i-begin-1));
+						res.filename = input.substr(i+2);
+						f = 0;
+				} else {
+						if (begin < i )
+								res.cmd.pb(input.substr(begin, i-begin-1));
+						int j = i+1;
+						for ( ; j < input.size(); j++) {
+
+								if ( input[j] == ' ' )
+										break;
+						}
+						//cout << i << ' ' << j << '\n';
+						//cout <<  atoi(input.substr(i+1, j-i).c_str()) << '\n';
+						res.writePipe = atoi(input.substr(i+1, j-i).c_str());
+
+						i = j;
+						begin = i+1;
+						if (begin > input.size()) {
+								f = 0;
+						}
+				}
+				break;
+
+			case '<':
+				if (i == input.size() - 1) {
+						break;
+				}
+				if ( input[i+1] == ' ' ) {
+						break;
+				} else {
+						if (begin < i )
+								res.cmd.pb(input.substr(begin, i-begin-1));
+						int j = i+1;
+						for ( ; j < input.size(); j++) {
+								if ( input[j] == ' ')
+										break;
+						}
+						//cout << i << ' ' << j << '\n';
+						//cout <<  atoi(input.substr(i+1, j-i).c_str()) << '\n';
+						res.readPipe = atoi(input.substr(i+1, j-i).c_str());
+						i = j;
+						begin = i+1;
+						//cout << begin << '\n';
+						if (begin > input.size()) {
+								f = 0;
+						}
+				}
+				break;
+
+			default:
+				continue;
+		}
+	}
+	if (f) {
+			res.cmd.pb(input.substr(begin));
+	}
+	return res;
+}
 
 ssize_t Read(int fd, void *vptr, size_t maxlen) {
 	ssize_t	n = read(fd, vptr, maxlen);
