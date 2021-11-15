@@ -25,7 +25,7 @@ void sigHandler(int signo) {
 	return;
 }
 
-int main (int argc, char ** argv) {
+int main (int argc, char ** arg) {
 	
 	int sockfd, newsockfd, childpid;
 	unsigned int clilen;
@@ -33,7 +33,7 @@ int main (int argc, char ** argv) {
 	struct sockaddr_in cli_addr, serv_addr;
 	
 	if (argc == 2) 
-		serv_port = atoi(argv[1]);
+		serv_port = atoi(arg[1]);
 	else {
 		cout << "[usage] ./np_single_proc <port number>\n";
 		exit(-1);
@@ -53,7 +53,7 @@ int main (int argc, char ** argv) {
 		perror("Bind error:");
 	}
 	
-	if (listen(sockfd, MAX_CLI) ) {
+	if (listen(sockfd, MAXCLI) ) {
 		perror("listen error:");
 	}
 	/// slave start from here

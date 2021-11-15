@@ -22,11 +22,14 @@
 
 #define pb(x) push_back(x)
 #define MAXLINE 16000
-#define MAX_CLI 30
+#define MAXCLI 30
 #define MSGLEN 1050
 #define VIT vector<client>::iterator
 #define VC vector<client>
 #define PII pair<int, int>
+#define SHMKEY ((key_t) 14096)
+#define PERMS 0666
+
 using namespace std;
 
 
@@ -35,12 +38,13 @@ struct clientInfo {
 	int pid, port, id;
 	char name[25], ip[50];
 	
-	info(int _pid, int _port, int _id, char *name, char* ip):pid(_pid), port(_port), id(_id) {
+	clientInfo(int _pid, int _port, int _id, const char *_name, char *_ip):pid(_pid), port(_port), id(_id) {
 		memset(name, 0, sizeof(name));
 		memset(ip, 0, sizeof(ip));
 		strcpy(name, _name);
 		strcpy(ip, _ip);
 	}
+	
 	bool operator >(const clientInfo &a) {
 		return id > a.id;
 	}
@@ -91,6 +95,7 @@ struct parseRes {
 		return;
 	}
 };
+
 parseRes parse (string input) {
 	int begin = 0;
 	parseRes res;
