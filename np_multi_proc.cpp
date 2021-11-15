@@ -55,12 +55,39 @@ int main (int argc, char **argv) {
 			perror("Accept error:");
 			continue;
 		} 
+
+		char buf[MAXLINE];
+		memset(buf, 0, sizeof(buf));
 		
 		while ( (childPid = fork()) < 0 ) ; 
 		
 		if ( childPid == 0) {
-			while()		
-	
+			signal(SIGCHLD, SIG_IGN);
+			setenv("PATH", "bin:.", 1);
+			int rip = 0;
+			map<int, int[2]> mp;
+			close(ms);
+			while (true) {
+				Write(ns, "% ", 2); 
+				memset(buf, 0, sizeof(buf));
+				string input;
+				int cnt = Read(ns, buf, sizeof(buf));
+				
+				
+				for (int i = 0; i < cnt; i++) {
+					if (int(buf[i]) == 10 || int(buf[i]) == 13) 
+						buf[i] = 0;
+				}
+				
+				input = string(buf);
+				
+				if (input.empty())
+					continue;
+				
+				rip++;
+			
+			}
+
 		
 		} else {
 			cout << childPid << '\n';
