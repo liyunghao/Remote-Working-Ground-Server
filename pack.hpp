@@ -56,7 +56,8 @@ struct memory {
 	struct clientInfo info[30];
 	int avail[30];
 	int userNum;
-	char op[20], msg[1050];
+	char op[20], msg[3000], tellmsg[5000];
+	int pipeFrom;
 };
 
 class client {
@@ -194,10 +195,15 @@ parseRes parse (string input) {
 }
 
 ssize_t Read(int fd, void *vptr, size_t maxlen) {
+	re:
 	ssize_t	n = read(fd, vptr, maxlen);
 	if(n < 0){
-			cerr << "Read Error" << endl;
-			exit(EXIT_FAILURE);
+		if (errno == EINTR) {
+			 cerr << "Reread\n";
+			goto re;
+		}
+		cerr << "Read Error" << endl;
+		exit(EXIT_FAILURE);
 	}
 	char *ptr = (char * )vptr;
 	ptr[n] = 0;
