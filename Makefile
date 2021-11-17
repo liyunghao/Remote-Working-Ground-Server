@@ -6,7 +6,7 @@ SRC = $(TARGET:=.cpp)
 all: $(TARGET) pack.hpp
 
 $(TARGET): % : %.cpp
-	g++ $< -o $@
+	g++ -lpthread -lrt $< -o $@
 
 1: np_simple
 	./np_simple 5057
@@ -19,7 +19,7 @@ $(TARGET): % : %.cpp
 	./np_multi_proc 5058
 
 %: %.cpp
-	g++ $< -o $@
+	g++ -lpthread -lrt $< -o $@
 	
 clean:
 	rm $(TARGET)

@@ -19,7 +19,8 @@
 #include <utility>
 #include <sys/ipc.h>
 #include <sys/shm.h>
-
+#include <sys/sem.h>
+#include <semaphore.h>
 #define pb(x) push_back(x)
 #define MAXLINE 16000
 #define MAXCLI 30
@@ -29,7 +30,7 @@
 #define PII pair<int, int>
 #define SHMKEY ((key_t) 14096)
 #define PERMS 0666
-
+#define SEM (shmptr->sem)
 using namespace std;
 
 
@@ -56,8 +57,10 @@ struct memory {
 	struct clientInfo info[30];
 	int avail[30];
 	int userNum;
-	char op[20], msg[3000], tellmsg[5000];
-	int pipeFrom;
+	char op[20], msg[5000];
+	int pipeNo[2];
+	int userPipe[32][32];
+	sem_t sem;
 };
 
 class client {
@@ -231,6 +234,8 @@ ssize_t	writen(int fd, const void *vptr, size_t n) {
 
 void Write(int fd, const void *ptr, size_t nbytes) {
 	if (writen(fd, ptr, nbytes) != nbytes){
+		//string msg = string((char*)ptr);
+		//cerr << msg << "\n";
 		perror("Write Error");
 		exit(EXIT_FAILURE);
 	}

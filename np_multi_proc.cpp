@@ -5,6 +5,7 @@ int rip;
 map<int, int[2]> mp;
 int shmid;
 int curfd;
+int up[35];
 
 struct memory *shmptr;
 
@@ -15,20 +16,30 @@ void sigHandle(int signo) {
 	cout << "Parent exit by SIGINT\n";
 	exit(0);
 }
+
 void childINT(int signo) {
 	shmdt((void*)shmptr);
 	cout << "Child exit by SIGINT\n";
 	exit(0);
 }
+
 void recvUSR1(int signo) {
 	// recv message
-	string msg = shmptr->msg;
+	//cout << "RECVUSR1\n";
+	string msg = string(shmptr->msg);
+	//cout << shmptr->msg << endl;
 	Write(curfd, msg.c_str(), msg.size());
 	
 }
+
 void recvUSR2(int signo) {
 	//recv fifo req
+	int from = shmptr->pipeNo[0], to = shmptr->pipeNo[1];
+	string fname = "./user_pipe/fifo" + to_string(from) + "to" + to_string(to);
+	up[from] = open(fname.c_str(), O_RDONLY);
+	
 }
+
 void sigChild(int signo) {
 	pid_t pid;
 	int stat;
@@ -36,13 +47,17 @@ void sigChild(int signo) {
 	return;
 }
 void broadcast(string msg) {
-	memset(shmptr->msg, 0, sizeof(shmptr->msg));
+	sem_wait(&SEM);
+	//memset(shmptr->msg, 0, sizeof(shmptr->msg));
 	strcpy(shmptr->msg, msg.c_str());
+
 	for (int i = 0; i < 30; i++) {
 		if (shmptr->avail[i] == 1) {
+			//sem_post(&SEM);
 			kill(shmptr->info[i].pid, SIGUSR1);
 		}
 	}
+	sem_post(&SEM);
 }
 void name(int idx, string s) {
 	string msg;
@@ -54,7 +69,9 @@ void name(int idx, string s) {
             return;
 		}
 	}
+	sem_wait(&SEM);
 	strcpy(shmptr->info[idx].name, s.c_str());
+	sem_post(&SEM);
 	msg = "*** User from "+ string(shmptr->info[idx].ip) + ":" + to_string(shmptr->info[idx].port) +" is named \'" + s + "\'. ***\n";
 	broadcast(msg);
 }
@@ -67,10 +84,12 @@ void yell(int idx, string s) {
 void tell(int idx, int to, string s) {
 	string msg;
 	for (int i = 0; i < 30; i++) {
-		if (shmptr->avail[i] == 1 && i == to) {
-			msg = "*** " + string(shmptr->info[i].name) + " told you ***: " + s + "\n";
-			memset(shmptr->msg, 0, sizeof(shmptr->msg));
+		if (shmptr->avail[i] == 1 && shmptr->info[i].id == to) {
+			msg = "*** " + string(shmptr->info[idx].name) + " told you ***: " + s + "\n";
+			sem_wait(&SEM);
+			//memset(shmptr->msg, 0, sizeof(shmptr->msg));
 			strcpy(shmptr->msg, msg.c_str());
+			sem_post(&SEM);
 			kill(shmptr->info[i].pid, SIGUSR1);
 			return;
 		}
@@ -101,17 +120,41 @@ void login(int idx) {
 	msg = "*** User \'" + string(shmptr->info[idx].name) + "\' entered from " + string(shmptr->info[idx].ip) + ":" + to_string(shmptr->info[idx].port) + ". ***\n";	
 	broadcast(msg);
 }
-void welcome(int fd) {
+void welcome() {
 	string msg;
 	msg = "****************************************\n** Welcome to the information server. **\n****************************************\n";
-	Write(fd, msg.c_str(), msg.size());
+	Write(curfd, msg.c_str(), msg.size());
 }
 void logout(int idx) {
 	string msg;
 	msg = "*** User \'" + string(shmptr->info[idx].name) + "\' left. ***\n";
-	close( curfd);
+	close(curfd);
+	for (int i = 1; i <= 30; i++) {
+		if ( shmptr->userPipe[i][idx+1] ) {
+			string fname = "./user_pipe/fifo" + to_string(i) + "to" + to_string(idx+1);
+			unlink(fname.c_str());
+			sem_wait(&SEM);
+			shmptr->userPipe[i][idx+1] = 0;
+			sem_post(&SEM);
+		}
+	}
+	
+	for (int i = 1; i <= 30; i++) {
+		if (shmptr->userPipe[idx+1][i] ) {
+			string fname = "./user_pipe/fifo" + to_string(idx+1) + "to" + to_string(i);
+			
+			unlink(fname.c_str());
+			sem_wait(&SEM);
+			shmptr->userPipe[idx+1][i] = 0;
+			sem_post(&SEM);
+		}
+	}
+
+	sem_wait(&SEM);
 	shmptr->avail[idx] = 0;
+	sem_post(&SEM);
 	broadcast(msg);
+	//kill all pipe
 }
 
 
@@ -135,12 +178,82 @@ void exec_cmd(string input, int idx) {
 			mp[rip + res.exp][1] = fd[1];	
 		}
 	}
-	//if (res.readPipe) {
+	string readname;
+	int rfd = -1;
 	
-	//} 
-	//if (res.writePipe) {
+	if (res.readPipe) {
+		//error !FIFO存在 or USER不在 or PIPE IN
+		readname = "./user_pipe/fifo" + to_string(res.readPipe) + "to" + to_string(idx+1);
+		struct stat *sb;
+		if (shmptr->avail[res.readPipe-1] == 0) {
+			//	USER不存在
+			string msg;
+			msg = "*** Error: user #" + to_string(res.readPipe) + " does not exist yet. ***\n";
+			Write(curfd, msg.c_str(), msg.size());
+		} else if ( shmptr->userPipe[res.readPipe][idx+1] == 0) {
+			//	FIFO不存在
+			string msg;
+			msg = "*** Error: the pipe #" + to_string(res.readPipe) + "->#" + to_string(idx+1) + " does not exist yet. ***\n";
+			Write(curfd, msg.c_str(), msg.size());
+		} else {
+			// succues
+			//string msg;
+			//msg = "*** " + string(shmptr->info[idx].name) + " (#" + to_string(shmptr->info[idx].id) + ") just received from ";
+			//msg += string(shmptr->info[res.readPipe-1].name) + " (#" +to_string(res.readPipe) + ") by \'" + input + "\' ***\n";
+			//broadcast(msg);
+			rfd = up[res.readPipe];
+		}
+	} 
 	
-	//}
+	int wfd = -1;
+
+	if (res.writePipe) {
+		//FIFO存在 and USER不在 and PIPE 成功
+		string fname = "./user_pipe/fifo" + to_string(idx+1) + "to" + to_string(res.writePipe);
+		struct stat *sb;
+		if (shmptr->avail[res.writePipe-1] == 0) {
+			// user dont exist
+			string msg;
+			msg = "*** Error: user #" + to_string(res.writePipe) + " does not exist yet. ***\n";
+			Write(curfd, msg.c_str(), msg.size());
+		} else if ( shmptr->userPipe[idx+1][res.writePipe] == 0) {
+			sem_wait(&SEM);
+			shmptr->userPipe[idx+1][res.writePipe] = 1;
+			shmptr->pipeNo[0] = idx+1, shmptr->pipeNo[1] = res.writePipe;
+			sem_post(&SEM);
+
+			if ( ( mknod(fname.c_str(), S_IFIFO | PERMS, 0)) < 0 ) {
+				//perror("OPEN FIFO");
+			}
+			
+			kill(shmptr->info[res.writePipe-1].pid, SIGUSR2);
+			//cout << "open f\n";
+			wfd = open(fname.c_str(), O_WRONLY);
+
+			//string msg;
+			//msg = "*** " + string(shmptr->info[idx].name) + " (#" + to_string(shmptr->info[idx].id) + ") just piped \'" + input + "\' to "; 
+			//msg += string(shmptr->info[res.writePipe-1].name) + " (#" + to_string(shmptr->info[res.writePipe-1].id) + ") ***\n";
+			//broadcast(msg);
+		} else {
+			//FIFO exist
+			string msg;
+			msg = "*** Error: the pipe #" + to_string(idx+1) + "->#" + to_string(res.writePipe) + " already exists. ***\n";
+			Write(curfd, msg.c_str(), msg.size());
+		}
+	}
+	string bmsg;
+	if (rfd != -1 ) {
+		bmsg = "*** " + string(shmptr->info[idx].name) + " (#" + to_string(shmptr->info[idx].id) + ") just received from ";
+		bmsg += string(shmptr->info[res.readPipe-1].name) + " (#" +to_string(res.readPipe) + ") by \'" + input + "\' ***\n";
+
+	}
+	if (wfd != -1) {
+		bmsg += "*** " + string(shmptr->info[idx].name) + " (#" + to_string(shmptr->info[idx].id) + ") just piped \'" + input + "\' to "; 
+		bmsg += string(shmptr->info[res.writePipe-1].name) + " (#" + to_string(shmptr->info[res.writePipe-1].id) + ") ***\n";
+	}
+	if (rfd != -1 || wfd != -1) {
+		broadcast(bmsg);	
+	}
 	int cmdlen = res.cmd.size();
 	int pipesz = cmdlen - 1;
 	
@@ -193,7 +306,7 @@ void exec_cmd(string input, int idx) {
 			continue;
 		} else if ( !strncmp(argv[0], "tell", 4) ) {
 			string msg;
-			int found = input.find(argv[1]);
+			int found = input.find(argv[2]);
 			msg = input.substr(found);
 		 	tell(idx, atoi(argv[1]), msg);	
 			continue;
@@ -207,13 +320,14 @@ void exec_cmd(string input, int idx) {
 		}
 				
 		int pid;
-
+		
 		while ( (pid = fork()) == -1) ;
 			
 		lastpid = pid;
 				
-		if (mp.find(rip) != mp.end())
+		if (mp.find(rip) != mp.end()) {
 			close(mp[rip][1]);
+		}
 		if (pid == 0) {
 			if (res.cmd.size() != 1) { 
 				// multiple subprocess
@@ -221,6 +335,13 @@ void exec_cmd(string input, int idx) {
 					// first process
 					if (mp.find(rip) != mp.end()) {
 						dup2(mp[rip][0], STDIN_FILENO);
+					} else if (res.readPipe) {
+						if (rfd == -1) {
+							int d = open("/dev/null", O_RDWR);
+							dup2(d, STDIN_FILENO);
+						} else {
+							dup2(up[res.readPipe], STDIN_FILENO);
+						}
 					}
 					dup2(cur[1], STDOUT_FILENO);
 					close(cur[0]);
@@ -244,9 +365,15 @@ void exec_cmd(string input, int idx) {
 						}
 						dup2(f, STDOUT_FILENO);
 						close(f);
+					} else if (res.writePipe) {
+						if (wfd == -1) {
+							int d = open("/dev/null", O_RDWR);
+							dup2(d, STDOUT_FILENO);
+						} else {
+							dup2(wfd, STDOUT_FILENO);
+						}
 					} else {
 						dup2(curfd, STDOUT_FILENO);
-						close(curfd);
 					}
 				} else {
 					dup2(prev[0], STDIN_FILENO);
@@ -259,6 +386,14 @@ void exec_cmd(string input, int idx) {
 			} else {
 				if (mp.find(rip) != mp.end()) {
 					dup2(mp[rip][0], STDIN_FILENO);
+				}
+				if (res.readPipe) {
+					if (rfd == -1) {
+						int d = open("/dev/null", O_RDWR);
+						dup2(d, STDIN_FILENO);
+					} else {
+						dup2(up[res.readPipe], STDIN_FILENO);
+					}
 				}
 				if (res.np) {
 					dup2(mp[rip + res.np][1], STDOUT_FILENO);
@@ -274,17 +409,24 @@ void exec_cmd(string input, int idx) {
 						perror("dup2 error");
 					}
 					close(f);
+				} else if (res.writePipe) { 
+					if (wfd == -1) {
+						int d = open("/dev/null", O_RDWR);
+						dup2(d, STDOUT_FILENO);
+					} else {
+						dup2(wfd, STDOUT_FILENO);
+					}
 				} else {
 					dup2(curfd, STDOUT_FILENO);
-					// ??
-					close(curfd);
 				}
 			}
 					
 			if (execvp(argv[0], argv) < 0 ) {
-				// poss
-				cerr << "Unknown command: [" << argv[0] << "].\n";
-				return ;
+				string msg = "Unknown command: [" + string(argv[0]) + "].\n";
+				Write(curfd, msg.c_str(), msg.size());
+				
+				close(curfd);
+				exit(-1);
 			}
 		} else {
 			if (prev) {
@@ -297,13 +439,23 @@ void exec_cmd(string input, int idx) {
 
 	}	
 	int status;
-	if ( res.np == 0 && res.exp == 0) {
+	if ( res.np == 0 && res.exp == 0 && res.writePipe == 0) {
 		waitpid(lastpid, nullptr, WUNTRACED);
+	}
+	if (res.writePipe) {
+		close(wfd);
 	}
 	if (mp.find(rip) != mp.end()) {
 		//close(mp[rip][1]);
 		close(mp[rip][0]);
 		mp.erase(rip);
+	}
+	if (res.readPipe) {
+		sem_wait(&SEM);
+		shmptr->userPipe[res.readPipe][idx+1] = 0;
+		sem_post(&SEM);
+		close(rfd);
+		unlink(readname.c_str());
 	}
 	return;
 }
@@ -342,6 +494,7 @@ int main (int argc, char **argv) {
 	//signal(SIGCHLD, sigChild);
 	signal(SIGINT, sigHandle);
 	clilen = sizeof(cliaddr);
+
 	
 	if ( (shmid = shmget(SHMKEY, sizeof(memory), PERMS|IPC_CREAT) ) < 0 ) {
 		perror("Shmget error");
@@ -350,8 +503,10 @@ int main (int argc, char **argv) {
 	if ( (shmptr = (struct memory *) shmat(shmid, NULL, 0)) == nullptr ) {
 		perror("Shmat error");
 	}
-
-	
+	if ( (sem_init(&(shmptr->sem), 1, 1)) == -1) {
+		perror("Sem_init");
+	}
+		
 
 	while (true) {
 		int childPid;
@@ -367,15 +522,17 @@ int main (int argc, char **argv) {
 		int port = ntohs(cliaddr.sin_port);
 		for (int i = 0; i < 30; i++) {
 			if (shmptr->avail[i] == 0) {
-				shmptr->avail[i] = 1;
 				id = i+1;
 				break;
 			}
 		}
-	
+		
+		sem_wait(&SEM);	
 		shmptr->userNum += 1;	
-		
-		
+		sem_post(&SEM);
+
+		signal(SIGUSR1, recvUSR1);
+		signal(SIGUSR2, recvUSR2);	
 		char buf[MAXLINE];
 		memset(buf, 0, sizeof(buf));
 		
@@ -384,12 +541,18 @@ int main (int argc, char **argv) {
 		if ( childPid == 0) {
 			signal(SIGCHLD, SIG_IGN);
 			signal(SIGINT, childINT);
-			signal(SIGUSR1, recvUSR1);
+
 			setenv("PATH", "bin:.", 1);
-			
+			dup2(curfd, STDOUT_FILENO);
+			dup2(curfd, STDERR_FILENO);	
+			//init
 			rip = 0;
 			mp.clear();
-
+			memset(up, 0, sizeof(up));
+			welcome();	
+			string msg;
+			msg = "*** User \'" + string("(no name)")+ "\' entered from " + string(ip) + ":" + to_string(port) + ". ***\n";	
+			Write(curfd, msg.c_str(), msg.size());
 			close(ms);
 			while (true) {
 				Write(ns, "% ", 2); 
@@ -414,26 +577,33 @@ int main (int argc, char **argv) {
 				rip++;
 				if (input == "exit") {
 					// handle logout
+					sem_wait(&SEM);
 					shmptr->userNum -= 1;
+					sem_post(&SEM);
 					cout << "exit\n";
+					logout(id-1);
 					return(0);
 					//logout();
 				} 
-				if (input == "test") {
-					string msg = to_string(shmptr->userNum);
-					Write(ns, msg.c_str(), msg.size());
-				}
 				//Write(ns, input.c_str(), input.size());
+				//cerr << "Input: " << input << '\n';
 				exec_cmd(input, id-1);
+				//cerr << "finish\n";
 			}
 
 		
 		} else {
+			
 			string tmp = "(no name)";
+			sem_wait(&SEM);
 			shmptr->info[id-1] = clientInfo(childPid, port, id, tmp.c_str(), ip);
-			welcome(ns);
+			sem_post(&SEM);
+
 			login(id-1);
 			cout << childPid << '\n';
+			sem_wait(&SEM);
+			shmptr->avail[id-1] = 1;
+			sem_post(&SEM);
 			close(ns);
 		}
 	
