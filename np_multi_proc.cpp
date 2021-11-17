@@ -185,7 +185,7 @@ void exec_cmd(string input, int idx) {
 		//error !FIFO存在 or USER不在 or PIPE IN
 		readname = "./user_pipe/fifo" + to_string(res.readPipe) + "to" + to_string(idx+1);
 		struct stat *sb;
-		if (shmptr->avail[res.readPipe-1] == 0) {
+		if ( res.readPipe > 30 || shmptr->avail[res.readPipe-1] == 0) {
 			//	USER不存在
 			string msg;
 			msg = "*** Error: user #" + to_string(res.readPipe) + " does not exist yet. ***\n";
@@ -211,7 +211,7 @@ void exec_cmd(string input, int idx) {
 		//FIFO存在 and USER不在 and PIPE 成功
 		string fname = "./user_pipe/fifo" + to_string(idx+1) + "to" + to_string(res.writePipe);
 		struct stat *sb;
-		if (shmptr->avail[res.writePipe-1] == 0) {
+		if ( res.writePipe > 30 || shmptr->avail[res.writePipe-1] == 0) {
 			// user dont exist
 			string msg;
 			msg = "*** Error: user #" + to_string(res.writePipe) + " does not exist yet. ***\n";
