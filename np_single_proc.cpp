@@ -142,6 +142,7 @@ void exec_cmd(string input, VIT it) {
 			it->mp[it->rip + res.exp][1] = fd[1];	
 		}
 	}
+	int rfd = 0;
 	if (res.readPipe) {
 		int user = 0;
 		for (VIT iter = clients.begin(); iter != clients.end(); iter++) {
@@ -154,6 +155,7 @@ void exec_cmd(string input, VIT it) {
 					Write(it->fd, msg.c_str(), msg.size());
 				} else {
 					// recv pipe
+					rfd = 1;
 					string msg;
 					msg = "*** " + it->name + " (#" + to_string(it->id) + ") just received from " + iter->name + " (#" +to_string(iter->id) + ") by \'" + input + "\' ***\n";
 					broadcast(msg.c_str(), msg.size());
@@ -169,6 +171,7 @@ void exec_cmd(string input, VIT it) {
 			Write(it->fd, msg.c_str(), msg.size());
 		}
 	}
+	int wfd = 0;
 	if (res.writePipe) {
 
 		int user = 0;
@@ -178,6 +181,7 @@ void exec_cmd(string input, VIT it) {
 				if (iter->up.find(it->id) == iter->up.end()) {
 					int fd[2];
 					pipe(fd);
+					wfd = 1;
 					//cerr << "Opening: ";
 					//cerr << fd[0] << ' ' << fd[1] << '\n';
 					iter->up[it->id][0] = fd[0];
@@ -456,7 +460,7 @@ void exec_cmd(string input, VIT it) {
 
 	}
 	int status;
-    if ( res.np == 0 && res.exp == 0 && res.writePipe == 0) {
+    if ( res.np == 0 && res.exp == 0 && wfd == 0) {
     	waitpid(lastpid, nullptr, WUNTRACED);
     }
     if (it->mp.find(it->rip) != it->mp.end()) {
@@ -464,7 +468,7 @@ void exec_cmd(string input, VIT it) {
     	close(it->mp[it->rip][0]);
     	it->mp.erase(it->rip);
     }
-	if (res.readPipe) {
+	if (rfd == 1) {
 		if (it->up.find(res.readPipe) != it->up.end()) {
 			//cerr << "Finish reading so need to close pipe: ";
 			//cerr << it->up[res.readPipe][0] << ' ' << it->up[res.readPipe][1] << '\n';

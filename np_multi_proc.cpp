@@ -426,7 +426,7 @@ void exec_cmd(string input, int idx) {
 				Write(curfd, msg.c_str(), msg.size());
 				
 				close(curfd);
-				exit(-1);
+				exit(0);
 			}
 		} else {
 			if (prev) {
@@ -439,10 +439,10 @@ void exec_cmd(string input, int idx) {
 
 	}	
 	int status;
-	if ( res.np == 0 && res.exp == 0 && res.writePipe == 0) {
+	if ( res.np == 0 && res.exp == 0 && wfd == -1) {
 		waitpid(lastpid, nullptr, WUNTRACED);
 	}
-	if (res.writePipe) {
+	if (wfd != -1) {
 		close(wfd);
 	}
 	if (mp.find(rip) != mp.end()) {
@@ -450,7 +450,7 @@ void exec_cmd(string input, int idx) {
 		close(mp[rip][0]);
 		mp.erase(rip);
 	}
-	if (res.readPipe) {
+	if (rfd != -1) {
 		sem_wait(&SEM);
 		shmptr->userPipe[res.readPipe][idx+1] = 0;
 		sem_post(&SEM);
